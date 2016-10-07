@@ -4,6 +4,7 @@ namespace Algolia\AlgoliaSearchBundle\Indexer;
 
 use Doctrine\Common\Persistence\ObjectManager;
 use Doctrine\Common\Persistence\Proxy;
+use Doctrine\ODM\MongoDB\DocumentManager;
 use Symfony\Component\PropertyAccess\PropertyAccess;
 
 use Algolia\AlgoliaSearchBundle\Exception\UnknownEntity;
@@ -206,6 +207,10 @@ class Indexer
         $needsIndexing = true;
         $wasIndexed = true;
 
+        if ($this->isEmbeddedObject($entity)) {
+            return false;
+        }
+
         foreach (self::$indexSettings[$class]->getIndexIfs() as $if) {
             if (null === $changeSet) {
                 if (!$if->evaluate($entity)) {
@@ -307,7 +312,7 @@ class Indexer
         $value = $accessor->getValue($entity, $field);
 
         if ($value instanceof \Doctrine\Common\Collections\Collection) {
-            if ($depth >= 2) {
+            if ($depth >= 2 && !$this->isEmbeddedObject($entity)) {
                 return null;
             }
 
@@ -327,7 +332,7 @@ class Indexer
         }
 
         if (is_object($value) && $this->isEntity($this->objectManager, $value)) {
-            if ($depth >= 2) {
+            if ($depth >= 2 && !$this->isEmbeddedObject($entity)) {
                 return null;
             }
 
@@ -819,5 +824,19 @@ class Indexer
         }
 
         return $this;
+    }
+
+    /**
+     * @param $entity
+     * @return bool
+     */
+    private function isEmbeddedObject($entity)
+    {
+        if (! $this->objectManager instanceof DocumentManager) {
+            return false;
+        }
+
+        $classMetadata = $this->objectManager->getClassMetadata($this->getClass($entity));
+        return $classMetadata->isEmbeddedDocument;
     }
 }
